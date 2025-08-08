@@ -1,13 +1,15 @@
 import {useState} from "react";
 import {
     Drawer,
-    Toolbar,
     Typography,
     TextField,
     Button,
     Divider,
     Box
 } from "@mui/material";
+import {LocalizationProvider} from "@mui/x-date-pickers/LocalizationProvider";
+import {AdapterDateFns} from "@mui/x-date-pickers/AdapterDateFns";
+import {DateTimePicker} from "@mui/x-date-pickers/DateTimePicker";
 import WebSocketService from "../services/WebSocketService";
 
 const USE_MOCK = true;
@@ -15,15 +17,23 @@ const wsClient = USE_MOCK
     ? {sendCommand: (cmd, params) => console.log("MOCK COMMAND:", cmd, params)}
     : new WebSocketService("ws://192.168.4.1:8080/ws");
 
-function Sidebar() {
+function Sidebar({ onSelectView }) {
     // Stato per form getHistory
-    const [since, setSince] = useState("");
+    const [selectedDate, setSelectedDate] = useState(new Date());
     const [onlyCritical, setOnlyCritical] = useState(false);
 
-    // Stato per form setConfig
+    const handleGetHistory = () => {
+        const isoDate = selectedDate.toISOString(); // conversione automatica
+        console.log("Invio comando getHistory con:", isoDate, onlyCritical);
+        // wsClient.sendCommand("getHistory", { since: isoDate, onlyCritical });
+    };
+
+    /* Stato per form setConfig
     const [freq, setFreq] = useState(1);
     const [threshold1, setThreshold1] = useState(3.0);
     const [threshold2, setThreshold2] = useState(2.0);
+    */
+
 
     // Funzione generica invio comando
     const handleCommand = (cmd, params = {}) => {
@@ -49,34 +59,32 @@ function Sidebar() {
             {/* GET HISTORY */}
             <Box sx={{p: 1}}>
                 <Typography variant="body2" sx={{fontWeight: "bold", mb: 1}}>Get History</Typography>
-                <TextField
-                    label="Since (ISO8601)"
-                    value={since}
-                    onChange={(e) => setSince(e.target.value)}
-                    size="small"
-                    fullWidth
-                    sx={{mb: 1}}
-                />
+                <LocalizationProvider dateAdapter={AdapterDateFns}>
+                    <DateTimePicker
+                        label="Data e ora"
+                        value={selectedDate}
+                        onChange={(newValue) => setSelectedDate(newValue)}
+                        renderInput={(params) => <TextField {...params} fullWidth size="small" sx={{mb: 1}}/>}
+                    />
+                </LocalizationProvider>
+
                 <Button
                     variant={onlyCritical ? "contained" : "outlined"}
                     size="small"
                     onClick={() => setOnlyCritical(!onlyCritical)}
-                    sx={{mb: 1}}
+                    sx={{mb: 1, mt: 1}}
                 >
                     {onlyCritical ? "Solo Critici: ON" : "Solo Critici: OFF"}
                 </Button>
-                <Button
-                    variant="contained"
-                    fullWidth
-                    onClick={() => handleCommand("getHistory", {since, onlyCritical})}
-                >
+
+                <Button variant="contained" fullWidth onClick={handleGetHistory}>
                     Invia
                 </Button>
             </Box>
 
             <Divider sx={{my: 1}}/>
 
-            {/* SET CONFIG */}
+            {/* SET CONFIG
             <Box sx={{p: 1}}>
                 <Typography variant="body2" sx={{fontWeight: "bold", mb: 1}}>Set Config</Typography>
                 <TextField
@@ -119,7 +127,7 @@ function Sidebar() {
             </Box>
 
             <Divider sx={{my: 1}}/>
-
+            */}
             {/* PING */}
             <Box sx={{p: 1}}>
                 <Typography variant="body2" sx={{fontWeight: "bold", mb: 1}}>Ping</Typography>
@@ -134,7 +142,7 @@ function Sidebar() {
 
             <Divider sx={{my: 1}}/>
 
-            {/* RESET BUFFER */}
+            {/* RESET BUFFER
             <Box sx={{p: 1}}>
                 <Typography variant="body2" sx={{fontWeight: "bold", mb: 1}}>Reset Buffer</Typography>
                 <Button
@@ -146,7 +154,46 @@ function Sidebar() {
                     Reset
                 </Button>
             </Box>
+            */}
 
+            {/* ALTRE FUNZIONI */}
+            <Box sx={{ p: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: "bold", mb: 1 }}>
+                    Viste
+                </Typography>
+                <Button
+                    variant="contained"
+                    fullWidth
+                    onClick={() => {
+                        handleCommand("map");
+                        onSelectView("map");
+                    }}
+                >
+                    Mappa
+                </Button>
+                <Divider sx={{my: 1}}/>
+                <Button
+                    variant="contained"
+                    fullWidth
+                    onClick={() => {
+                        handleCommand("table");
+                        onSelectView("table");
+                    }}
+                >
+                    Tabella
+                </Button>
+                <Divider sx={{my: 1}}/>
+                <Button
+                    variant="contained"
+                    fullWidth
+                    onClick={() => {
+                        handleCommand("charts");
+                        onSelectView("charts");
+                    }}
+                >
+                    Grafici
+                </Button>
+            </Box>
         </Drawer>
     );
 }

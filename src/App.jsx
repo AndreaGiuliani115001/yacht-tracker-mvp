@@ -1,4 +1,4 @@
-import LiveDashboard from "./components/LiveDashboard";
+import LiveDashboard from "./pages/LiveDashboard.jsx";
 
 function App() {
     return (

@@ -32,9 +32,10 @@ function DataTable({ dataList }) {
                 <TableHead>
                     <TableRow sx={{ backgroundColor: "#eeeeee" }}>
                         <TableCell>Data e ora</TableCell>
-                        <TableCell>Forza X</TableCell>
-                        <TableCell>Forza Y</TableCell>
-                        <TableCell>Forza Z</TableCell>
+                        <TableCell>Velocità</TableCell>
+                        <TableCell>accellerazione X</TableCell>
+                        <TableCell>accellerazione Y</TableCell>
+                        <TableCell>accellerazione Z</TableCell>
                         <TableCell>Latitudine</TableCell>
                         <TableCell>Longitudine</TableCell>
                         <TableCell>Classificazione</TableCell>
@@ -49,9 +50,10 @@ function DataTable({ dataList }) {
                         dataList.map((item, index) => (
                             <TableRow key={index} sx={getRowStyle(item.classificazione)}>
                                 <TableCell>{formatTimestamp(item.timestamp)}</TableCell>
-                                <TableCell>{item.forzaX}</TableCell>
-                                <TableCell>{item.forzaY}</TableCell>
-                                <TableCell>{item.forzaZ}</TableCell>
+                                <TableCell>{item.velocita} nodi</TableCell>
+                                <TableCell>{item.accelX}</TableCell>
+                                <TableCell>{item.accelY}</TableCell>
+                                <TableCell>{item.accelZ}</TableCell>
                                 <TableCell>{item.posizioneLat.toFixed(5)}</TableCell>
                                 <TableCell>{item.posizioneLon.toFixed(5)}</TableCell>
                                 <TableCell>{item.classificazione}</TableCell>
