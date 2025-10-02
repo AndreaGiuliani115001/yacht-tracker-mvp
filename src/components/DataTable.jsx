@@ -1,47 +1,85 @@
+import React, { useMemo } from "react";
 import {
     Table, TableBody, TableCell,
     TableContainer, TableHead, TableRow, Paper
 } from "@mui/material";
 
-// helper: sanitizza numeri tipo "+013.30112"
-function sanitizeNumberLike(v) {
-    if (v === null || v === undefined) return NaN;
-    let s = String(v).trim().replace(/^\+/, "");
-    if (/^0\d/.test(s)) s = s.replace(/^0+(\d)/, "$1");
-    const n = Number(s);
-    return Number.isFinite(n) ? n : NaN;
+import { CLASS_COLORS } from "@/shared/constants.js";
+import { toISOts, toNum, formatTs, parseDate } from "@/utils/data.js";
+
+/** Colori “light” per le righe */
+const ROW_BG = {
+    verde: "#e6f4ea",
+    giallo: "#fff8e1",
+    rosso: "#fdecea",
+};
+
+/** Limite locale di righe (indipendente dal MAX_ROWS del dashboard) */
+const MAX_ROWS_TABLE = 100;
+
+/** Formatter numerico: n (Number|null) → stringa con unità opzionale */
+function formatNum(n, digits = 2, unit = "") {
+    if (n === null || !Number.isFinite(n)) return "—";
+    return unit ? `${n.toFixed(digits)} ${unit}` : n.toFixed(digits);
 }
 
-function DataTable({dataList}) {
-    const getRowStyle = (classificazione) => {
-        switch ((classificazione || "").toLowerCase()) {
-            case "verde":
-                return {backgroundColor: "#e6f4ea"};
-            case "giallo":
-                return {backgroundColor: "#fff8e1"};
-            case "rosso":
-                return {backgroundColor: "#fdecea"};
-            default:
-                return {};
-        }
-    };
+function DataTable({ dataList }) {
+    const rows = useMemo(() => {
+        const mapped = (dataList || []).map((item, idx) => {
+            const ts = toISOts(item);
 
-    const formatTimestamp = (isoLike) => {
-        const val = isoLike || null;
-        if (!val) return "—";
-        const d = new Date(val);
-        if (isNaN(d.getTime())) return "—";
-        return new Intl.DateTimeFormat("it-IT", {
-            dateStyle: "short",
-            timeStyle: "medium",
-        }).format(d);
+            // valori numerici (toNum → null se non valido)
+            const speed = toNum(item.Speed);
+            const ax = toNum(item.accelX);
+            const ay = toNum(item.accelY);
+            const az = toNum(item.accelZ);
+            const aSum = toNum(item.accelSum);
+
+            const pitch = toNum(item.pitch);
+            const roll = toNum(item.roll);
+            const yaw = toNum(item.yaw);
+
+            // Lat/Lon: etichette originali o alias normalizzati
+            const lat = toNum(item.Lat ?? item.Latitude);
+            const lon = toNum(item.Lon ?? item.Longitude);
+
+            const clsRaw = item.classificazione ?? "—";
+            const cls = typeof clsRaw === "string" ? clsRaw.toLowerCase() : String(clsRaw);
+
+            return {
+                id: ts ? `ts-${ts}-${idx}` : `row-${idx}`, // key stabile anche con ts uguali
+                ts,
+                tsDate: parseDate(ts), // per ordinamento robusto
+                speed, ax, ay, az, aSum,
+                pitch, roll, yaw,
+                lat, lon,
+                cls,
+            };
+        });
+
+        // Ordina: più recente prima (DESC). I null vanno in fondo.
+        mapped.sort((a, b) => {
+            if (!a.tsDate && !b.tsDate) return 0;
+            if (!a.tsDate) return 1;
+            if (!b.tsDate) return -1;
+            return b.tsDate - a.tsDate;
+        });
+
+        // Cap locale per sicurezza (evita tabella infinita)
+        return mapped.slice(0, MAX_ROWS_TABLE);
+    }, [dataList]);
+
+    const getRowStyle = (classificazione) => {
+        const key = (classificazione || "").toLowerCase();
+        if (key in ROW_BG) return { backgroundColor: ROW_BG[key] };
+        return {};
     };
 
     return (
-        <TableContainer component={Paper} sx={{width: "100%", height: "100%", boxShadow: 3, borderRadius: 2}}>
-            <Table stickyHeader sx={{width: "100%", tableLayout: "fixed"}}>
+        <TableContainer component={Paper} sx={{ width: "100%", height: "100%", boxShadow: 3, borderRadius: 2 }}>
+            <Table stickyHeader sx={{ width: "100%", tableLayout: "fixed" }}>
                 <TableHead>
-                    <TableRow sx={{backgroundColor: "#eeeeee"}}>
+                    <TableRow sx={{ backgroundColor: "#eeeeee" }}>
                         <TableCell>Data e ora</TableCell>
                         <TableCell>Velocità</TableCell>
                         <TableCell>accelX</TableCell>
@@ -57,48 +95,29 @@ function DataTable({dataList}) {
                     </TableRow>
                 </TableHead>
                 <TableBody>
-                    {dataList.length === 0 ? (
+                    {rows.length === 0 ? (
                         <TableRow>
                             <TableCell colSpan={12} align="center">Nessun dato</TableCell>
                         </TableRow>
                     ) : (
-                        dataList.map((item, idx) => {
-                            const ts = item.timestamp || item.DateTime || null;
-
-                            // campi numerici esatti dal device
-                            const speed = Number(item.Speed);
-                            const ax = Number(item.accelX);
-                            const ay = Number(item.accelY);
-                            const az = Number(item.accelZ);
-                            const asum = Number(item.accelSum);
-
-                            const pitch = Number(item.pitch);
-                            const roll = Number(item.roll);
-                            const yaw = Number(item.yaw);
-
-                            // Lat/Lon come arrivano (Lat/Lon), con sanitize per + e zeri
-                            const lat = sanitizeNumberLike(item.Lat);
-                            const lon = sanitizeNumberLike(item.Lon);
-
-                            const cls = item.classificazione || "—";
-
-                            return (
-                                <TableRow key={idx} sx={getRowStyle(cls)}>
-                                    <TableCell>{formatTimestamp(ts)}</TableCell>
-                                    <TableCell>{Number.isFinite(speed) ? `${speed.toFixed(2)} kn` : "—"}</TableCell>
-                                    <TableCell>{Number.isFinite(ax) ? ax.toFixed(3) : "—"}</TableCell>
-                                    <TableCell>{Number.isFinite(ay) ? ay.toFixed(3) : "—"}</TableCell>
-                                    <TableCell>{Number.isFinite(az) ? az.toFixed(3) : "—"}</TableCell>
-                                    <TableCell>{Number.isFinite(asum) ? asum.toFixed(3) : "—"}</TableCell>
-                                    <TableCell>{Number.isFinite(pitch) ? pitch.toFixed(2) : "—"}</TableCell>
-                                    <TableCell>{Number.isFinite(roll) ? roll.toFixed(2) : "—"}</TableCell>
-                                    <TableCell>{Number.isFinite(yaw) ? yaw.toFixed(2) : "—"}</TableCell>
-                                    <TableCell>{Number.isFinite(lat) ? lat.toFixed(5) : "—"}</TableCell>
-                                    <TableCell>{Number.isFinite(lon) ? lon.toFixed(5) : "—"}</TableCell>
-                                    <TableCell>{cls}</TableCell>
-                                </TableRow>
-                            );
-                        })
+                        rows.map((r) => (
+                            <TableRow key={r.id} sx={getRowStyle(r.cls)}>
+                                <TableCell>{formatTs(r.ts)}</TableCell>
+                                <TableCell>{formatNum(r.speed, 2, "kn")}</TableCell>
+                                <TableCell>{formatNum(r.ax, 3)}</TableCell>
+                                <TableCell>{formatNum(r.ay, 3)}</TableCell>
+                                <TableCell>{formatNum(r.az, 3)}</TableCell>
+                                <TableCell>{formatNum(r.aSum, 3)}</TableCell>
+                                <TableCell>{formatNum(r.pitch, 2)}</TableCell>
+                                <TableCell>{formatNum(r.roll, 2)}</TableCell>
+                                <TableCell>{formatNum(r.yaw, 2)}</TableCell>
+                                <TableCell>{formatNum(r.lat, 5)}</TableCell>
+                                <TableCell>{formatNum(r.lon, 5)}</TableCell>
+                                <TableCell style={{ color: CLASS_COLORS[r.cls] || "inherit", fontWeight: 600 }}>
+                                    {r.cls || "—"}
+                                </TableCell>
+                            </TableRow>
+                        ))
                     )}
                 </TableBody>
             </Table>
@@ -106,4 +125,4 @@ function DataTable({dataList}) {
     );
 }
 
-export default DataTable;
+export default React.memo(DataTable);

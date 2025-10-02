@@ -2,25 +2,15 @@
 import {useEffect, useRef, useState} from "react";
 import {Box, Toolbar} from "@mui/material";
 
-import MockDataService from "../services/MockDataService.js";
-import WebSocketService from "../services/WebSocketService.js";
+import Navbar from "@/components/Navbar.jsx";
+import Sidebar from "@/components/Sidebar.jsx";
+import DataTable from "@/components/DataTable.jsx";
+import MapView from "@/components/map/MapView.jsx";
+import ChartsView from "@/components/charts/ChartsView.jsx";
+import {CONFIG} from "@/shared/config.js";
+import {createDataService} from "@/services/dataServiceFactory.js";
 
-import Navbar from "../components/Navbar.jsx";
-import Sidebar from "../components/Sidebar.jsx";
-import DataTable from "../components/DataTable.jsx";
-import MapView from "../components/MapView.jsx";
-import ChartsView from "../components/ChartsView.jsx";
-
-/**
- * Config runtime (non cambia la logica: default invariati).
- * VITE_USE_MOCK: "true" | "false"
- * VITE_WS_URL: string (es. ws://192.168.4.1/ws)
- */
-const USE_MOCK =
-    String(import.meta.env?.VITE_USE_MOCK ?? "false").toLowerCase() === "true";
-const WS_URL = import.meta.env?.VITE_WS_URL ?? "ws://192.168.4.1/ws";
-
-/** Manteniamo gli ultimi N elementi (nuovi in testa), come da logica originale. */
+/** Manteniamo gli ultimi N elementi (nuovi in testa) */
 const MAX_ROWS = 20;
 
 /**
@@ -29,7 +19,7 @@ const MAX_ROWS = 20;
  * - Registra i listener PRIMA della connect() e gestisce cleanup completo.
  * - Aggiorna lo stato connessione e il buffer dati (ultimi 20).
  */
-function LiveDashboard() {
+export default function LiveDashboard() {
     /** @type {ReturnType<typeof useState<"map"|"table"|"charts">>} */
     const [view, setView] = useState("map");
     const [dataList, setDataList] = useState([]);
@@ -38,20 +28,23 @@ function LiveDashboard() {
     // Istanzia il service UNA SOLA VOLTA per il ciclo di vita del componente
     const serviceRef = useRef(null);
     if (!serviceRef.current) {
-        serviceRef.current = USE_MOCK ? new MockDataService() : new WebSocketService(WS_URL);
+
+        // Con factory + config centralizzata:
+        serviceRef.current = createDataService(CONFIG);
     }
     const dataService = serviceRef.current;
 
     useEffect(() => {
-        let isMounted = true; // micro-guard contro setState dopo unmount
+        let isMounted = true;
 
         // --- Handlers ---
         const onOpen = () => {
             if (!isMounted) return;
             setConnectionStatus("Connesso");
+            // Safe-start: anche se chiamato prima di open, viene accodato dal service
             dataService.sendStartOnce({
-                freq: 1,
-                threshold: {giallo: 2.5, rosso: 5},
+                freq: 10,
+                threshold: {giallo: 2.0, rosso: 3.0},
             });
         };
 
@@ -77,12 +70,14 @@ function LiveDashboard() {
             setDataList((prev) => [msg, ...prev].slice(0, MAX_ROWS));
         };
 
-        // --- Registra i listener PRIMA di connect() ---
-        dataService.on("open", onOpen);
-        dataService.on("close", onClose);
-        dataService.on("status", onStatus);
-        dataService.on("error", onError);
-        dataService.on("data", onData);
+        // --- Registra i listener PRIMA di connect() usando unsubscribe ergonomico ---
+        const unsubs = [
+            dataService.on("open", onOpen),
+            dataService.on("close", onClose),
+            dataService.on("status", onStatus),
+            dataService.on("error", onError),
+            dataService.on("data", onData),
+        ].filter(Boolean);
 
         // --- Connetti (idempotente) ---
         dataService.connect();
@@ -90,14 +85,14 @@ function LiveDashboard() {
         // --- Cleanup ---
         return () => {
             isMounted = false;
-            dataService.off("open", onOpen);
-            dataService.off("close", onClose);
-            dataService.off("status", onStatus);
-            dataService.off("error", onError);
-            dataService.off("data", onData);
-            dataService.close();
+            // esegui tutti gli unsubscribe se presenti
+            for (const u of unsubs) try {
+                u && u();
+            } catch { /* noop */
+            }
+            // pulizia totale del service (chiude ws, svuota listener, cancella timer)
+            dataService.destroy?.() ?? dataService.close?.();
         };
-        // Notare: usiamo direttamente serviceRef.current, niente deps -> effetto una volta sola.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Intenzionale: esegui una sola volta al mount
 
@@ -116,5 +111,3 @@ function LiveDashboard() {
         </Box>
     );
 }
-
-export default LiveDashboard;
